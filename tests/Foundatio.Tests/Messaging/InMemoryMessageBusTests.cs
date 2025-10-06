@@ -22,6 +22,9 @@ public class InMemoryMessageBusTests : MessageBusTestBase, IDisposable
             o.LoggerFactory(Log);
             if (config != null)
                 config(o.Target);
+            o.Target.MessageTypeMappings.Add(nameof(SimpleMessageA), typeof(SimpleMessageA));
+            o.Target.MessageTypeMappings.Add(nameof(SimpleMessageB), typeof(SimpleMessageB));
+            o.Target.MessageTypeMappings.Add(nameof(SimpleMessageC), typeof(SimpleMessageC));
 
             return o;
         });

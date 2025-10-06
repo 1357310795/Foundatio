@@ -13,7 +13,12 @@ public class SharedMessageBusOptions : SharedOptions
     /// <summary>
     /// Controls which types messages are mapped to.
     /// </summary>
-    public Dictionary<string, Type> MessageTypeMappings { get; set; } = new Dictionary<string, Type>();
+    public Dictionary<string, Type> MessageTypeMappings { get; set; } = new Dictionary<string, Type>()
+    {
+        { nameof(Foundatio.Jobs.WorkItemStatus), typeof(Foundatio.Jobs.WorkItemStatus) },
+        { nameof(Foundatio.Lock.CacheLockReleased), typeof(Foundatio.Lock.CacheLockReleased) },
+        { nameof(Foundatio.Caching.HybridCacheClient.InvalidateCache), typeof(Foundatio.Caching.HybridCacheClient.InvalidateCache) },
+    };
 }
 
 public class SharedMessageBusOptionsBuilder<TOptions, TBuilder> : SharedOptionsBuilder<TOptions, TBuilder>

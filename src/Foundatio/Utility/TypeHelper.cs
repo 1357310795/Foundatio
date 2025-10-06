@@ -1,9 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Reflection;
-using Microsoft.Extensions.Logging;
 
 namespace Foundatio.Utility;
 
@@ -30,30 +26,30 @@ public static class TypeHelper
     public static readonly Type UInt64Type = typeof(ulong);
     public static readonly Type DoubleType = typeof(double);
 
-    public static Type ResolveType(string fullTypeName, Type expectedBase = null, ILogger logger = null)
-    {
-        if (String.IsNullOrEmpty(fullTypeName))
-            return null;
+    //public static Type ResolveType(string fullTypeName, Type expectedBase = null, ILogger logger = null)
+    //{
+    //    if (String.IsNullOrEmpty(fullTypeName))
+    //        return null;
 
-        var type = Type.GetType(fullTypeName);
-        if (type == null)
-        {
-            if (logger != null)
-                logger.LogError("Unable to resolve type: {TypeFullName}.", fullTypeName);
+    //    var type = Type.GetType(fullTypeName);
+    //    if (type == null)
+    //    {
+    //        if (logger != null)
+    //            logger.LogError("Unable to resolve type: {TypeFullName}.", fullTypeName);
 
-            return null;
-        }
+    //        return null;
+    //    }
 
-        if (expectedBase != null && !expectedBase.IsAssignableFrom(type))
-        {
-            if (logger != null)
-                logger.LogError("Type {TypeFullName} must be assignable to type: {ExpectedFullName}.", fullTypeName, expectedBase.FullName);
+    //    if (expectedBase != null && !expectedBase.IsAssignableFrom(type))
+    //    {
+    //        if (logger != null)
+    //            logger.LogError("Type {TypeFullName} must be assignable to type: {ExpectedFullName}.", fullTypeName, expectedBase.FullName);
 
-            return null;
-        }
+    //        return null;
+    //    }
 
-        return type;
-    }
+    //    return type;
+    //}
 
     private static readonly Dictionary<Type, string> _builtInTypeNames = new() {
         { StringType, "string" },
@@ -76,7 +72,7 @@ public static class TypeHelper
     public static string GetTypeDisplayName(Type type)
     {
         string fullName = null;
-        if (type.GetTypeInfo().IsGenericType)
+        if (type.IsGenericType)
         {
             fullName = type.GetGenericTypeDefinition().FullName;
 
@@ -118,25 +114,25 @@ public static class TypeHelper
         return fullName;
     }
 
-    public static IEnumerable<Type> GetDerivedTypes<TAction>(IEnumerable<Assembly> assemblies = null)
-    {
-        if (assemblies == null)
-            assemblies = AppDomain.CurrentDomain.GetAssemblies();
+    //public static IEnumerable<Type> GetDerivedTypes<TAction>(IEnumerable<Assembly> assemblies = null)
+    //{
+    //    if (assemblies == null)
+    //        assemblies = AppDomain.CurrentDomain.GetAssemblies();
 
-        var types = new List<Type>();
-        foreach (var assembly in assemblies)
-        {
-            try
-            {
-                types.AddRange(from type in assembly.GetTypes() where type.IsClass && !type.IsNotPublic && !type.IsAbstract && typeof(TAction).IsAssignableFrom(type) select type);
-            }
-            catch (ReflectionTypeLoadException ex)
-            {
-                string loaderMessages = String.Join(", ", ex.LoaderExceptions.ToList().Select(le => le.Message));
-                Trace.TraceInformation("Unable to search types from assembly \"{0}\" for plugins of type \"{1}\": {2}", assembly.FullName, typeof(TAction).Name, loaderMessages);
-            }
-        }
+    //    var types = new List<Type>();
+    //    foreach (var assembly in assemblies)
+    //    {
+    //        try
+    //        {
+    //            types.AddRange(from type in assembly.GetTypes() where type.IsClass && !type.IsNotPublic && !type.IsAbstract && typeof(TAction).IsAssignableFrom(type) select type);
+    //        }
+    //        catch (ReflectionTypeLoadException ex)
+    //        {
+    //            string loaderMessages = String.Join(", ", ex.LoaderExceptions.ToList().Select(le => le.Message));
+    //            Trace.TraceInformation("Unable to search types from assembly \"{0}\" for plugins of type \"{1}\": {2}", assembly.FullName, typeof(TAction).Name, loaderMessages);
+    //        }
+    //    }
 
-        return types;
-    }
+    //    return types;
+    //}
 }

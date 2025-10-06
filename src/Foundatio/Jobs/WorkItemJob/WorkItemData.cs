@@ -1,4 +1,5 @@
-﻿using Foundatio.Metrics;
+﻿using System;
+using Foundatio.Metrics;
 using Foundatio.Queues;
 
 namespace Foundatio.Jobs;
@@ -6,7 +7,7 @@ namespace Foundatio.Jobs;
 public class WorkItemData : IHaveSubMetricName, IHaveUniqueIdentifier
 {
     public string WorkItemId { get; set; }
-    public string Type { get; set; }
+    public Type Type { get; set; }
     public byte[] Data { get; set; }
     public bool SendProgressReports { get; set; }
     public string UniqueIdentifier { get; set; }

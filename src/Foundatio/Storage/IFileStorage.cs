@@ -114,6 +114,20 @@ public class FileSpec : IHaveData
     /// A place to store any additional metadata or headers (e.g., eTag, versionId).
     /// </summary>
     public IDictionary<string, object> Data { get; } = new DataDictionary();
+
+    public FileSpec DeepClone()
+    {
+        var inst = new FileSpec()
+        {
+            Path = Path,
+            Created = Created,
+            Modified = Modified,
+            Size = Size,
+        };
+        foreach (var key in Data.Keys)
+            inst.Data[key] = Data[key];
+        return inst;
+    }
 }
 
 public static class FileStorageExtensions

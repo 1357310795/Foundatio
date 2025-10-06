@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Foundatio.Resilience;
@@ -49,6 +48,7 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
 
     protected virtual Task EnsureTopicCreatedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     protected abstract Task PublishImplAsync(string messageType, object message, MessageOptions options, CancellationToken cancellationToken);
+    protected abstract Task PublishImplAsync<T>(string messageType, T message, MessageOptions options, CancellationToken cancellationToken) where T : class;
     public async Task PublishAsync(Type messageType, object message, MessageOptions options = null, CancellationToken cancellationToken = default)
     {
         if (messageType == null || message == null)
@@ -67,6 +67,25 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
         await PublishImplAsync(GetMappedMessageType(messageType), message, options ?? new MessageOptions(), cancellationToken).AnyContext();
     }
 
+    public async Task PublishAsync<T>(T message, MessageOptions options = null, CancellationToken cancellationToken = default) where T : class
+    {
+        var messageType = typeof(T);
+        if (messageType == null || message == null)
+            return;
+
+        options ??= new MessageOptions();
+
+        if (String.IsNullOrEmpty(options.CorrelationId))
+        {
+            options.CorrelationId = Activity.Current?.Id;
+            if (!String.IsNullOrEmpty(Activity.Current?.TraceStateString))
+                options.Properties.Add("TraceState", Activity.Current.TraceStateString);
+        }
+
+        await EnsureTopicCreatedAsync(cancellationToken).AnyContext();
+        await PublishImplAsync<T>(GetMappedMessageType(messageType), message, options ?? new MessageOptions(), cancellationToken).AnyContext();
+    }
+
     private readonly ConcurrentDictionary<Type, string> _mappedMessageTypesCache = new();
     protected string GetMappedMessageType(Type messageType)
     {
@@ -76,7 +95,7 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
             if (reversedMap.ContainsKey(type))
                 return reversedMap[type];
 
-            return String.Concat(messageType.FullName, ", ", messageType.Assembly.GetName().Name);
+            return String.Concat(messageType.FullName);
         });
     }
 
@@ -91,28 +110,9 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
             if (_options.MessageTypeMappings != null && _options.MessageTypeMappings.ContainsKey(type))
                 return _options.MessageTypeMappings[type];
 
-            try
-            {
-                return Type.GetType(type);
-            }
-            catch (Exception)
-            {
-                try
-                {
-                    string[] typeParts = type.Split(',');
-                    if (typeParts.Length >= 2)
-                        type = String.Join(",", typeParts[0], typeParts[1]);
+            _logger.LogCritical("Error getting message body type: {MessageType}", type);
 
-                    // try resolve type without version
-                    return Type.GetType(type);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error getting message body type: {MessageType}", type);
-
-                    return null;
-                }
-            }
+            return null;
         });
     }
 
@@ -151,7 +151,7 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
         if (subscriber.Type.Name == "IMessage`1" && subscriber.Type.GenericTypeArguments.Length == 1)
         {
             var modelType = subscriber.Type.GenericTypeArguments.Single();
-            subscriber.GenericType = typeof(Message<>).MakeGenericType(modelType);
+            subscriber.GenericType = Type.MakeGenericSignatureType(typeof(Message<>), modelType);
         }
 
         if (!_subscribers.TryAdd(subscriber.Id, subscriber))
@@ -266,7 +266,78 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
                     }
                     else if (subscriber.GenericType != null)
                     {
-                        object typedMessage = Activator.CreateInstance(subscriber.GenericType, message);
+                        _logger.LogCritical("Generic IMessage<T> subscribers require publish with type T.", subscriber.Id);
+                    }
+                    else
+                    {
+                        await subscriber.Action(message.GetBody(), subscriber.CancellationToken).AnyContext();
+                    }
+                }
+
+                _logger.LogTrace("Finished calling subscriber action: {SubscriberId}", subscriber.Id);
+            });
+        });
+
+        try
+        {
+            await Task.WhenAll(subscriberHandlers.ToArray());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error sending message to subscribers: {Message}", ex.Message);
+            throw;
+        }
+
+        _logger.LogTrace("Done enqueueing message to {SubscriberCount} subscribers for message type {MessageType}", subscribers.Count, message.Type);
+    }
+
+    protected async Task SendMessageToSubscribersAsync<T>(IMessage<T> message) where T : class
+    {
+        var subscribers = GetMessageSubscribers(message);
+
+        _logger.LogTrace("Found {SubscriberCount} subscribers for message type: ClrType={MessageClrType} Type={MessageType}", subscribers.Count, message.ClrType, message.Type);
+
+        if (subscribers.Count == 0)
+            return;
+
+        var subscriberHandlers = subscribers.Select(subscriber =>
+        {
+            if (subscriber.CancellationToken.IsCancellationRequested)
+            {
+                if (_subscribers.TryRemove(subscriber.Id, out _))
+                {
+                    _logger.LogTrace("Removed cancelled subscriber: {SubscriberId}", subscriber.Id);
+                }
+                else
+                {
+                    _logger.LogTrace("Unable to remove cancelled subscriber: {SubscriberId}", subscriber.Id);
+                }
+
+                return Task.CompletedTask;
+            }
+
+            return Task.Run(async () =>
+            {
+                if (subscriber.CancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogTrace("The cancelled subscriber action will not be called: {SubscriberId}", subscriber.Id);
+                    return;
+                }
+
+                _logger.LogTrace("Calling subscriber action: {SubscriberId}", subscriber.Id);
+                using var activity = StartHandleMessageActivity(message);
+
+                using (_logger.BeginScope(s => s
+                           .PropertyIf("UniqueId", message.UniqueId, !String.IsNullOrEmpty(message.UniqueId))
+                           .PropertyIf("CorrelationId", message.CorrelationId, !String.IsNullOrEmpty(message.CorrelationId))))
+                {
+                    if (subscriber.Type == typeof(IMessage))
+                    {
+                        await subscriber.Action(message, subscriber.CancellationToken).AnyContext();
+                    }
+                    else if (subscriber.GenericType != null)
+                    {
+                        object typedMessage = new Message<T>(message);
                         await subscriber.Action(typedMessage, subscriber.CancellationToken).AnyContext();
                     }
                     else
@@ -407,12 +478,12 @@ public abstract class MessageBusBase<TOptions> : IMessageBus, IHaveLogger, IHave
             {
                 if (t.IsClass)
                 {
-                    var typedMessageType = typeof(IMessage<>).MakeGenericType(t);
-                    if (Type == typedMessageType)
-                        return true;
+                    if (Type.IsGenericType)
+                        if (Type.GenericTypeArguments[0] == t)
+                            return true;
                 }
 
-                return Type.GetTypeInfo().IsAssignableFrom(t);
+                return Type.IsAssignableFrom(t);
             });
         }
     }

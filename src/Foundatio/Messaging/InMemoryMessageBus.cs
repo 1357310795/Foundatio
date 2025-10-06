@@ -76,6 +76,46 @@ public class InMemoryMessageBus : MessageBusBase<InMemoryMessageBusOptions>
         }
     }
 
+    protected override async Task PublishImplAsync<T>(string messageType, T message, MessageOptions options, CancellationToken cancellationToken) where T : class
+    {
+        Interlocked.Increment(ref _messagesSent);
+        _messageCounts.AddOrUpdate(messageType, t => 1, (t, c) => c + 1);
+        var mappedType = GetMappedMessageType(messageType);
+
+        if (_subscribers.IsEmpty)
+            return;
+
+        if (options.DeliveryDelay.HasValue && options.DeliveryDelay.Value > TimeSpan.Zero)
+        {
+            _logger.LogTrace("Schedule delayed message: {MessageType} ({Delay}ms)", messageType, options.DeliveryDelay.Value.TotalMilliseconds);
+            SendDelayedMessage(mappedType, message, options.DeliveryDelay.Value);
+            return;
+        }
+
+        byte[] body = SerializeMessageBody(messageType, message);
+        var messageData = new Message(body, DeserializeMessageBody)
+        {
+            CorrelationId = options.CorrelationId,
+            UniqueId = options.UniqueId,
+            Type = messageType,
+            ClrType = mappedType
+        };
+        var typedMessageData = new Message<T>(messageData);
+
+        foreach (var property in options.Properties)
+            messageData.Properties[property.Key] = property.Value;
+
+        try
+        {
+            await SendMessageToSubscribersAsync<T>(typedMessageData).AnyContext();
+        }
+        catch (Exception ex)
+        {
+            // swallow exceptions from subscriber handlers for the in memory bus
+            _logger.LogWarning(ex, "Error sending message to subscribers: {Message}", ex.Message);
+        }
+    }
+
     public override void Dispose()
     {
         _messageCounts.Clear();

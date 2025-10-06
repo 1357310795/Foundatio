@@ -6,29 +6,29 @@ namespace Foundatio.Extensions;
 
 public static class ServicesExtensions
 {
-    /// <summary>
-    /// Replaces an existing service descriptor with a new singleton service of the specified type.
-    /// </summary>
-    /// <param name="services"></param>
-    /// <typeparam name="TService"></typeparam>
-    /// <typeparam name="TImplementation"></typeparam>
-    /// <returns></returns>
-    public static IServiceCollection ReplaceSingleton<TService, TImplementation>(this IServiceCollection services)
-        where TService : class
-        where TImplementation : class, TService
-    {
-        // Remove the existing service descriptor
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(TService));
-        if (descriptor != null)
-        {
-            services.Remove(descriptor);
-        }
+    ///// <summary>
+    ///// Replaces an existing service descriptor with a new singleton service of the specified type.
+    ///// </summary>
+    ///// <param name="services"></param>
+    ///// <typeparam name="TService"></typeparam>
+    ///// <typeparam name="TImplementation"></typeparam>
+    ///// <returns></returns>
+    //public static IServiceCollection ReplaceSingleton<TService, TImplementation>(this IServiceCollection services)
+    //    where TService : class
+    //    where TImplementation : class, TService
+    //{
+    //    // Remove the existing service descriptor
+    //    var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(TService));
+    //    if (descriptor != null)
+    //    {
+    //        services.Remove(descriptor);
+    //    }
 
-        // Add the new singleton service
-        services.AddSingleton<TService, TImplementation>();
+    //    // Add the new singleton service
+    //    services.AddSingleton<TService, TImplementation>();
 
-        return services;
-    }
+    //    return services;
+    //}
 
     /// <summary>
     /// Replaces an existing service descriptor with a new singleton service of the specified type.

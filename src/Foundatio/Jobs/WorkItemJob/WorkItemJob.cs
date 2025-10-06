@@ -218,33 +218,9 @@ public class WorkItemJob : IQueueJob<WorkItemData>, IHaveLogger, IHaveLoggerFact
     }
 
     private readonly ConcurrentDictionary<string, Type> _knownTypesCache = new();
-    protected virtual Type GetWorkItemType(string workItemType)
+    protected virtual Type GetWorkItemType(Type workItemType)
     {
-        return _knownTypesCache.GetOrAdd(workItemType, type =>
-        {
-            try
-            {
-                return Type.GetType(type);
-            }
-            catch (Exception)
-            {
-                try
-                {
-                    string[] typeParts = type.Split(',');
-                    if (typeParts.Length >= 2)
-                        type = String.Join(",", typeParts[0], typeParts[1]);
-
-                    // try resolve type without version
-                    return Type.GetType(type);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error getting work item type: {WorkItemType}", type);
-
-                    return null;
-                }
-            }
-        });
+        return _knownTypesCache.GetOrAdd(workItemType.Name, workItemType);
     }
 
     protected async Task ReportProgressAsync(IWorkItemHandler handler, IQueueEntry<WorkItemData> queueEntry, int progress = 0, string message = null)
@@ -254,7 +230,7 @@ public class WorkItemJob : IQueueJob<WorkItemData>, IHaveLogger, IHaveLoggerFact
             await _publisher.PublishAsync(new WorkItemStatus
             {
                 WorkItemId = queueEntry.Value.WorkItemId,
-                Type = queueEntry.Value.Type,
+                Type = queueEntry.Value.Type.Name,
                 Progress = progress,
                 Message = message
             }).AnyContext();

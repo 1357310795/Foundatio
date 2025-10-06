@@ -1,7 +1,5 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Linq;
-using System.Reflection;
 using Foundatio.Serializer;
 
 namespace Foundatio.Utility;
@@ -69,14 +67,12 @@ internal static class TypeExtensions
             }
         }
 
-        var converter = TypeDescriptor.GetConverter(targetType);
         var valueType = value.GetType();
 
         if (targetType.IsAssignableFrom(valueType))
             return (T)value;
 
-        var targetTypeInfo = targetType.GetTypeInfo();
-        if (targetTypeInfo.IsEnum && (value is string || valueType.GetTypeInfo().IsEnum))
+        if (targetType.IsEnum && (value is string || valueType.IsEnum))
         {
             // attempt to match enum by name.
             if (EnumExtensions.TryEnumIsDefined(targetType, value.ToString()))
@@ -89,14 +85,15 @@ internal static class TypeExtensions
             throw new ArgumentException(message);
         }
 
-        if (targetTypeInfo.IsEnum && valueType.IsNumeric())
+        if (targetType.IsEnum && valueType.IsNumeric())
             return (T)Enum.ToObject(targetType, value);
 
-        if (converter.CanConvertFrom(valueType))
-        {
-            object convertedValue = converter.ConvertFrom(value);
-            return (T)convertedValue;
-        }
+        //var converter = TypeDescriptor.GetConverter(targetType);
+        //if (converter.CanConvertFrom(valueType))
+        //{
+        //    object convertedValue = converter.ConvertFrom(value);
+        //    return (T)convertedValue;
+        //}
 
         if (serializer != null && value is byte[] data)
         {
