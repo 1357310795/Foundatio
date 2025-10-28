@@ -1,10 +1,11 @@
 using System;
-using System.Collections.Concurrent;
+//using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Foundatio.Lock;
 using Foundatio.Queues;
 using Foundatio.Utility;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -12,34 +13,38 @@ namespace Foundatio.Jobs;
 
 public class WorkItemHandlers
 {
-    private readonly ConcurrentDictionary<Type, Lazy<IWorkItemHandler>> _handlers;
+    //private readonly ConcurrentDictionary<Type, Lazy<IWorkItemHandler>> _handlers;
+    private readonly IServiceProvider _serviceProvider;
 
-    public WorkItemHandlers()
+    public WorkItemHandlers(IServiceProvider serviceProvider)
     {
-        _handlers = new ConcurrentDictionary<Type, Lazy<IWorkItemHandler>>();
+        _serviceProvider = serviceProvider;
+        //_handlers = new ConcurrentDictionary<Type, Lazy<IWorkItemHandler>>();
     }
 
-    public void Register<T>(IWorkItemHandler handler)
-    {
-        _handlers.TryAdd(typeof(T), new Lazy<IWorkItemHandler>(() => handler));
-    }
+    //public void Register<T>(IWorkItemHandler handler)
+    //{
+    //    _handlers.TryAdd(typeof(T), new Lazy<IWorkItemHandler>(() => handler));
+    //}
 
-    public void Register<T>(Func<IWorkItemHandler> handler)
-    {
-        _handlers.TryAdd(typeof(T), new Lazy<IWorkItemHandler>(handler));
-    }
+    //public void Register<T>(Func<IWorkItemHandler> handler)
+    //{
+    //    _handlers.TryAdd(typeof(T), new Lazy<IWorkItemHandler>(handler));
+    //}
 
-    public void Register<T>(Func<WorkItemContext, Task> handler, ILogger logger = null, Action<IQueueEntry<WorkItemData>, Type, object> logProcessingWorkItem = null, Action<IQueueEntry<WorkItemData>, Type, object> logAutoCompletedWorkItem = null) where T : class
-    {
-        _handlers.TryAdd(typeof(T), new Lazy<IWorkItemHandler>(() => new DelegateWorkItemHandler(handler, logger, logProcessingWorkItem, logAutoCompletedWorkItem)));
-    }
+    //public void Register<T>(Func<WorkItemContext, Task> handler, ILogger logger = null, Action<IQueueEntry<WorkItemData>, Type, object> logProcessingWorkItem = null, Action<IQueueEntry<WorkItemData>, Type, object> logAutoCompletedWorkItem = null) where T : class
+    //{
+    //    _handlers.TryAdd(typeof(T), new Lazy<IWorkItemHandler>(() => new DelegateWorkItemHandler(handler, logger, logProcessingWorkItem, logAutoCompletedWorkItem)));
+    //}
 
-    public IWorkItemHandler GetHandler(Type jobDataType)
+    public IWorkItemHandler GetHandler(Type jobDataType, AsyncServiceScope serviceScope)
     {
-        if (!_handlers.TryGetValue(jobDataType, out var handler))
-            return null;
+        var handler = serviceScope.ServiceProvider.GetKeyedService<IWorkItemHandler>(jobDataType.FullName);
+        return handler;
+        //if (!_handlers.TryGetValue(jobDataType, out var handler))
+        //    return null;
 
-        return handler.Value;
+        //return handler.Value;
     }
 }
 
@@ -51,6 +56,8 @@ public interface IWorkItemHandler
     ILogger Log { get; set; }
     void LogProcessingQueueEntry(IQueueEntry<WorkItemData> queueEntry, Type workItemDataType, object workItem);
     void LogAutoCompletedQueueEntry(IQueueEntry<WorkItemData> queueEntry, Type workItemDataType, object workItem);
+    Task OnProcessingQueueEntry(IQueueEntry<WorkItemData> queueEntry, Type workItemDataType, object workItemData);
+    Task OnProcessedQueueEntry(IQueueEntry<WorkItemData> queueEntry, Type workItemDataType, object workItemData, JobResult result);
 }
 
 public abstract class WorkItemHandlerBase : IWorkItemHandler
@@ -87,6 +94,15 @@ public abstract class WorkItemHandlerBase : IWorkItemHandler
     protected int CalculateProgress(long total, long completed, int startProgress = 0, int endProgress = 100)
     {
         return startProgress + (int)((100 * (double)completed / total) * (((double)endProgress - startProgress) / 100));
+    }
+
+    public async virtual Task OnProcessingQueueEntry(IQueueEntry<WorkItemData> queueEntry, Type workItemDataType, object workItemData)
+    {
+        Log.LogInformation("Processing {TypeName} work item queue entry: {QueueEntryId}", workItemDataType.Name, queueEntry.Id);
+    }
+    public async virtual Task OnProcessedQueueEntry(IQueueEntry<WorkItemData> queueEntry, Type workItemDataType, object workItemData, JobResult result)
+    {
+        Log.LogInformation("Processed {TypeName} work item queue entry: {QueueEntryId}", workItemDataType.Name, queueEntry.Id);
     }
 }
 

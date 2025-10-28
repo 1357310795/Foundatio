@@ -7,6 +7,7 @@ using Foundatio.Messaging;
 using Foundatio.Queues;
 using Foundatio.Serializer;
 using Foundatio.Utility;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -20,12 +21,14 @@ public class WorkItemJob : IQueueJob<WorkItemData>, IHaveLogger, IHaveLoggerFact
     protected readonly IQueue<WorkItemData> _queue;
     protected readonly ILogger _logger;
     protected readonly ILoggerFactory _loggerFactory;
+    protected readonly IServiceScopeFactory _serviceScopeFactory;
 
-    public WorkItemJob(IQueue<WorkItemData> queue, IMessagePublisher publisher, WorkItemHandlers handlers, ILoggerFactory loggerFactory = null)
+    public WorkItemJob(IQueue<WorkItemData> queue, IMessagePublisher publisher, WorkItemHandlers handlers, IServiceScopeFactory serviceScopeFactory, ILoggerFactory loggerFactory = null)
     {
         _publisher = publisher;
         _handlers = handlers;
         _queue = queue;
+        _serviceScopeFactory = serviceScopeFactory;
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger(GetType());
     }
@@ -60,6 +63,8 @@ public class WorkItemJob : IQueueJob<WorkItemData>, IHaveLogger, IHaveLoggerFact
 
     public async Task<JobResult> ProcessAsync(IQueueEntry<WorkItemData> queueEntry, CancellationToken cancellationToken)
     {
+        using var serviceScope = _serviceScopeFactory.CreateAsyncScope();
+
         if (cancellationToken.IsCancellationRequested && queueEntry == null)
             return JobResult.Cancelled;
 
@@ -97,7 +102,7 @@ public class WorkItemJob : IQueueJob<WorkItemData>, IHaveLogger, IHaveLoggerFact
             return JobResult.FromException(ex, $"Abandoning {queueEntry.Value.Type} work item: {queueEntry.Id}: Failed to parse {workItemDataType.Name} work item data");
         }
 
-        var handler = _handlers.GetHandler(workItemDataType);
+        var handler = _handlers.GetHandler(workItemDataType, serviceScope);
         if (handler == null)
         {
             await queueEntry.CompleteAsync().AnyContext();
@@ -141,7 +146,9 @@ public class WorkItemJob : IQueueJob<WorkItemData>, IHaveLogger, IHaveLoggerFact
         {
             handler.LogProcessingQueueEntry(queueEntry, workItemDataType, workItemData);
             var workItemContext = new WorkItemContext(workItemData, JobId, lockValue, cancellationToken, progressCallback);
+            await handler.OnProcessingQueueEntry(queueEntry, workItemDataType, workItemData);
             await handler.HandleItemAsync(workItemContext).AnyContext();
+            await handler.OnProcessedQueueEntry(queueEntry, workItemDataType, workItemData, workItemContext.Result);
 
             if (!workItemContext.Result.IsSuccess)
             {
