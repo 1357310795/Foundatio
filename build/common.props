@@ -16,7 +16,6 @@
     <WarningsAsErrors>true</WarningsAsErrors>
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageOutputPath>$(SolutionDir)artifacts</PackageOutputPath>
     <PackageIcon>foundatio-icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
@@ -24,6 +23,9 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <DebugType>embedded</DebugType>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageOutputPath>C:\Users\teru\source\repos\nuget</PackageOutputPath>
+    <PackageVersion>1.0.0-local</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">

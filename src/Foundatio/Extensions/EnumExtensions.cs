@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Reflection;
 
 namespace Foundatio.Utility;
 
@@ -13,7 +12,7 @@ internal static class EnumExtensions
     /// <returns>True if the enum value is defined.</returns>
     public static bool TryEnumIsDefined(Type type, object value)
     {
-        if (type == null || value == null || !type.GetTypeInfo().IsEnum)
+        if (type == null || value == null || !type.IsEnum)
             return false;
 
         // Return true if the value is an enum and is a matching type.

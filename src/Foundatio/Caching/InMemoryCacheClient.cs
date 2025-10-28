@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1158,7 +1157,7 @@ public class InMemoryCacheClient : IMemoryCacheClient, IHaveTimeProvider, IHaveL
                 t.IsNullableNumeric())
                 return false;
 
-            return !t.GetTypeInfo().IsValueType;
+            return !t.IsValueType;
         }
     }
 }
